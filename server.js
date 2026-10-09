@@ -1,3 +1,4 @@
+//server.js
 "use strict";
 
 const express = require("express");
@@ -13,13 +14,14 @@ const app = express(); // Web framework to handle routing requests
 const routes = require("./app/routes");
 const { port, db, cookieSecret } = require("./config/config"); // Application config properties
 
-MongoClient.connect(db, (err, db) => {
+MongoClient.connect(db, { useNewUrlParser: true, useUnifiedTopology: true }, (err, client) => {
     if (err) {
         console.log("Error: DB: connect");
         console.log(err);
         process.exit(1);
     }
     console.log(`Connected to the database`);
+    const database = client.db(); // uses the database name from the URI (/nodegoat)
 
 
     // Adding/ remove HTTP Headers for security
@@ -55,7 +57,7 @@ MongoClient.connect(db, (err, db) => {
     app.locals.marked = marked;
 
     // Application routes
-    routes(app, db);
+    routes(app, database);
 
     // Template system setup
     swig.setDefaults({
