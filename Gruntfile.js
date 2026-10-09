@@ -1,6 +1,6 @@
 "use strict";
 
-var exec = require("child_process").exec;
+var execFile = require("child_process").execFile;
 
 var JS_FILES = ["Gruntfile.js", "app/assets/js/**", "config/config.js", "app/data/**/*.js",
     "app/routes/**/*.js", "server.js", "test/**/*.js"
@@ -147,15 +147,21 @@ module.exports = function(grunt) {
     // Making grunt default to force in order not to break the project.
     grunt.option("force", true);
 
+    // Fix for command injection: no shell string; the environment name is allowlisted
+    // and passed to a child process through its env instead of being concatenated into a command.
     grunt.registerTask("db-reset", "(Re)init the database.", function(arg) {
+        var allowedEnvs = ["development", "test", "production"];
         var finalEnv = process.env.NODE_ENV || arg || "development";
-        var done;
+        if (allowedEnvs.indexOf(finalEnv) === -1) {
+            grunt.fail.fatal("Invalid environment: " + finalEnv);
+        }
 
-        done = this.async();
-        var cmd = process.platform === "win32" ? "NODE_ENV=" + finalEnv + " & " : "NODE_ENV=" + finalEnv + " ";
+        var done = this.async();
 
-        exec(
-            cmd + "node artifacts/db-reset.js",
+        execFile(
+            process.execPath, ["artifacts/db-reset.js"], {
+                env: Object.assign({}, process.env, { NODE_ENV: finalEnv })
+            },
             function(err, stdout, stderr) {
                 if (err) {
                     grunt.log.error("db-reset:");
