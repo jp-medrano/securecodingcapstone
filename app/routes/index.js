@@ -1,3 +1,4 @@
+const rateLimit = require("express-rate-limit");
 const SessionHandler = require("./session");
 const ProfileHandler = require("./profile");
 const BenefitsHandler = require("./benefits");
@@ -22,6 +23,17 @@ const index = (app, db) => {
     const memosHandler = new MemosHandler(db);
     const researchHandler = new ResearchHandler(db);
 
+    // Fix for missing rate limiting (express-rate-limit v5 for Node 12)
+    const generalLimiter = rateLimit({
+        windowMs: 15 * 60 * 1000,
+        max: 300
+    });
+    const loginLimiter = rateLimit({
+        windowMs: 15 * 60 * 1000,
+        max: 20
+    });
+    app.use(generalLimiter);
+
     // Middleware to check if a user is logged in
     const isLoggedIn = sessionHandler.isLoggedInMiddleware;
 
@@ -33,7 +45,7 @@ const index = (app, db) => {
 
     // Login form
     app.get("/login", sessionHandler.displayLoginPage);
-    app.post("/login", sessionHandler.handleLoginRequest);
+    app.post("/login", loginLimiter, sessionHandler.handleLoginRequest);
 
     // Signup form
     app.get("/signup", sessionHandler.displaySignupPage);
@@ -68,10 +80,18 @@ const index = (app, db) => {
     app.get("/memos", isLoggedIn, memosHandler.displayMemos);
     app.post("/memos", isLoggedIn, memosHandler.addMemos);
 
+    // Fix for open redirect: only redirect to known learning resources
+    const LEARN_LINKS = [
+        "https://www.khanacademy.org/economics-finance-domain/core-finance/investment-vehicles-tutorial/ira-401ks/v/traditional-iras"
+    ];
+
     // Handle redirect for learning resources link
     app.get("/learn", isLoggedIn, (req, res) => {
-        // Insecure way to handle redirects by taking redirect url from query string
-        return res.redirect(req.query.url);
+        const target = LEARN_LINKS.find(link => link === req.query.url);
+        if (!target) {
+            return res.status(400).send("Invalid learning resource link");
+        }
+        return res.redirect(target);
     });
 
     // Handle redirect for learning resources link
@@ -81,10 +101,14 @@ const index = (app, db) => {
         });
     });
 
+    // Fix for path traversal: only render known tutorial pages
+    const TUTORIAL_PAGES = ["a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9", "a10", "ssrf", "redos"];
+
     app.get("/tutorial/:page", (req, res) => {
-        const {
-            page
-        } = req.params
+        const page = TUTORIAL_PAGES.find(p => p === req.params.page);
+        if (!page) {
+            return res.status(404).send("Page not found");
+        }
         return res.render(`tutorial/${page}`, {
             environmentalScripts
         });

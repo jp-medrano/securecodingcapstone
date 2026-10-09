@@ -1,3 +1,4 @@
+// app/routes/session.js
 const UserDAO = require("../data/user-dao").UserDAO;
 const AllocationsDAO = require("../data/allocations-dao").AllocationsDAO;
 const {
@@ -59,19 +60,8 @@ function SessionHandler(db) {
             const invalidPasswordErrorMessage = "Invalid password";
             if (err) {
                 if (err.noSuchUser) {
-                    console.log('Error: attempt to login with invalid user: ', userName);
-
-                    // Fix for A1 - 3 Log Injection - encode/sanitize input for CRLF Injection
-                    // that could result in log forging:
-                    // - Step 1: Require a module that supports encoding
-                    // const ESAPI = require('node-esapi');
-                    // - Step 2: Encode the user input that will be logged in the correct context
-                    // following are a few examples:
-                    // console.log('Error: attempt to login with invalid user: %s', ESAPI.encoder().encodeForHTML(userName));
-                    // console.log('Error: attempt to login with invalid user: %s', ESAPI.encoder().encodeForJavaScript(userName));
-                    // console.log('Error: attempt to login with invalid user: %s', ESAPI.encoder().encodeForURL(userName));
-                    // or if you know that this is a CRLF vulnerability you can target this specifically as follows:
-                    // console.log('Error: attempt to login with invalid user: %s', userName.replace(/(\r\n|\r|\n)/g, '_'));
+                    // Avoid logging attacker-controlled username values to prevent log injection/forgery.
+                    console.log("Error: attempt to login with invalid user");
 
                     return res.render("login", {
                         userName: userName,
@@ -95,20 +85,14 @@ function SessionHandler(db) {
                 }
             }
 
-            // A2-Broken Authentication and Session Management
-            // Upon login, a security best practice with regards to cookies session management
-            // would be to regenerate the session id so that if an id was already created for
-            // a user on an insecure medium (i.e: non-HTTPS website or otherwise), or if an
-            // attacker was able to get their hands on the cookie id before the user logged-in,
-            // then the old session id will render useless as the logged-in user with new privileges
-            // holds a new session id now.
-
-            // Fix the problem by regenerating a session in each login
-            // by wrapping the below code as a function callback for the method req.session.regenerate()
-            // i.e:
-            // `req.session.regenerate(() => {})`
-            req.session.userId = user._id;
-            return res.redirect(user.isAdmin ? "/benefits" : "/dashboard")
+            // Fix for A2 Broken Authentication and Session Management:
+            // regenerate the session id on login so a pre-login session id (session fixation)
+            // is useless once the user has authenticated.
+            return req.session.regenerate((regenerateErr) => {
+                if (regenerateErr) return next(regenerateErr);
+                req.session.userId = user._id;
+                return res.redirect(user.isAdmin ? "/benefits" : "/dashboard");
+            });
         });
     };
 
@@ -134,7 +118,8 @@ function SessionHandler(db) {
         const USER_RE = /^.{1,20}$/;
         const FNAME_RE = /^.{1,100}$/;
         const LNAME_RE = /^.{1,100}$/;
-        const EMAIL_RE = /^[\S]+@[\S]+\.[\S]+$/;
+        // Fix for polynomial regex: dot-separated segments that cannot overlap, so no heavy backtracking
+        const EMAIL_RE = /^[^\s@.]+(\.[^\s@.]+)*@[^\s@.]+(\.[^\s@.]+)+$/;
         const PASS_RE = /^.{1,20}$/;
         /*
         //Fix for A2-2 - Broken Authentication -  requires stronger password
@@ -172,7 +157,7 @@ function SessionHandler(db) {
             return false;
         }
         if (email !== "") {
-            if (!EMAIL_RE.test(email)) {
+            if (typeof email !== "string" || email.length > 254 || !EMAIL_RE.test(email)) {
                 errors.emailError = "Invalid email address";
                 return false;
             }

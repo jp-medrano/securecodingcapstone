@@ -4,6 +4,10 @@ const {
     environmentalScripts
 } = require("../../config/config");
 
+// Fix for SSRF: the server decides the host; the user only supplies a validated stock symbol
+const STOCK_URL = "https://finance.yahoo.com/q?s=";
+const SYMBOL_RE = /^[A-Za-z0-9.\-]{1,10}$/;
+
 function ResearchHandler(db) {
     "use strict";
 
@@ -12,7 +16,11 @@ function ResearchHandler(db) {
     this.displayResearch = (req, res) => {
 
         if (req.query.symbol) {
-            const url = req.query.url + req.query.symbol;
+            if (typeof req.query.symbol !== "string" || !SYMBOL_RE.test(req.query.symbol)) {
+                return res.status(400).send("Invalid stock symbol");
+            }
+
+            const url = STOCK_URL + encodeURIComponent(req.query.symbol);
             return needle.get(url, (error, newResponse, body) => {
                 if (!error && newResponse.statusCode === 200) {
                     res.writeHead(200, {

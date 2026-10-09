@@ -9,6 +9,14 @@ function ContributionsHandler(db) {
 
     const contributionsDAO = new ContributionsDAO(db);
 
+    // Strictly parse a whole-number percentage; anything else becomes NaN
+    const parsePercentage = (value) => {
+        if (typeof value !== "string" || !/^\d{1,3}$/.test(value.trim())) {
+            return NaN;
+        }
+        return parseInt(value.trim(), 10);
+    };
+
     this.displayContributions = (req, res, next) => {
         const {
             userId
@@ -27,18 +35,11 @@ function ContributionsHandler(db) {
 
     this.handleContributionsUpdate = (req, res, next) => {
 
-        /*jslint evil: true */
-        // Insecure use of eval() to parse inputs
-        const preTax = eval(req.body.preTax);
-        const afterTax = eval(req.body.afterTax);
-        const roth = eval(req.body.roth);
+        // Fix for A1-1 SSJS Injection: parse the inputs as numbers instead of using eval()
+        const preTax = parsePercentage(req.body.preTax);
+        const afterTax = parsePercentage(req.body.afterTax);
+        const roth = parsePercentage(req.body.roth);
 
-        /*
-        //Fix for A1 -1 SSJS Injection attacks - uses alternate method to eval
-        const preTax = parseInt(req.body.preTax);
-        const afterTax = parseInt(req.body.afterTax);
-        const roth = parseInt(req.body.roth);
-        */
         const {
             userId
         } = req.session;
