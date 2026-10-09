@@ -11,6 +11,7 @@
     "csurf": "^1.8.3",
     "dont-sniff-mimetype": "^1.0.0",
     "express": "^4.13.4",
+    "express-rate-limit": "^5.5.1",
     "express-session": "^1.13.0",
     "forever": "^2.0.0",
     "helmet": "^2.0.0",
@@ -60,5 +61,9 @@
     "zaproxy": "^0.2.0"
   },
   "repository": "https://github.com/OWASP/NodejsGoat",
-  "license": "Apache 2.0"
+  "license": "Apache 2.0",
+  "allowScripts": {
+    "cypress@3.8.3": true,
+    "nodemon@1.19.4": true
+  }
 }
