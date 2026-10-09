@@ -1,10 +1,10 @@
-//server.js
 "use strict";
 
 const express = require("express");
 const favicon = require("serve-favicon");
 const bodyParser = require("body-parser");
 const session = require("express-session");
+const csrf = require("csurf");
 const consolidate = require("consolidate"); // Templating library adapter for Express
 const swig = require("swig");
 const MongoClient = require("mongodb").MongoClient; // Driver for connecting to MongoDB
@@ -23,6 +23,8 @@ MongoClient.connect(db, { useNewUrlParser: true, useUnifiedTopology: true }, (er
     console.log(`Connected to the database`);
     const database = client.db(); // uses the database name from the URI (/nodegoat)
 
+    // Render terminates HTTPS at its proxy: needed for secure cookies and correct client IPs
+    app.set("trust proxy", 1);
 
     // Adding/ remove HTTP Headers for security
     app.use(favicon(__dirname + "/app/assets/favicon.ico"));
@@ -39,9 +41,21 @@ MongoClient.connect(db, { useNewUrlParser: true, useUnifiedTopology: true }, (er
         secret: cookieSecret,
         // Both mandatory in Express v4
         saveUninitialized: true,
-        resave: true
-
+        resave: true,
+        // Fix for clear text transmission of the session cookie
+        cookie: {
+            httpOnly: true,
+            secure: true,
+            sameSite: "lax"
+        }
     }));
+
+    // Fix for missing CSRF protection: must come after sessions and body parsing, before routes
+    app.use(csrf());
+    app.use((req, res, next) => {
+        res.locals.csrftoken = req.csrfToken();
+        next();
+    });
 
     // Register templating engine
     app.engine(".html", consolidate.swig);
