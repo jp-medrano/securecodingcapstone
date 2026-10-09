@@ -56,6 +56,15 @@ function UserDAO(db) {
 
     this.validateLogin = (userName, password, callback) => {
 
+        // Fix for NoSQL injection: only plain strings may reach the query
+        // (JSON bodies could otherwise send objects such as {"$ne": ""})
+        if (typeof userName !== "string" || typeof password !== "string") {
+            const noSuchUserError = new Error("Invalid user name or password");
+            // Set an extra field so we can distinguish this from a db error
+            noSuchUserError.noSuchUser = true;
+            return callback(noSuchUserError, null);
+        }
+
         // Helper function to compare passwords
         const comparePassword = (fromDB, fromUser) => {
             return fromDB === fromUser;
@@ -101,6 +110,10 @@ function UserDAO(db) {
     };
 
     this.getUserByUserName = (userName, callback) => {
+        // Fix for NoSQL injection: reject anything that is not a plain string
+        if (typeof userName !== "string") {
+            return callback(new Error("Invalid user name"), null);
+        }
         usersCol.findOne({
             userName: userName
         }, callback);
@@ -120,4 +133,4 @@ function UserDAO(db) {
     };
 }
 
-module.exports = { UserDAO };
+module.exports = { UserDAO };
